@@ -9,7 +9,7 @@ class Game:
         print("\n[Receiving Phase]")
         for agent in self.agents:
             if agent.is_alive():
-                agent.decide_receive()
+                agent.execute_receive()
 
         print("\n[Action Phase]")
         for agent in self.agents:

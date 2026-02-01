@@ -12,10 +12,27 @@ class Agent:
         self.hp = 10
         self.incoming = []
 
+        self.choices = ["accept", "reject"]
+        self.speeches = ["", "A", "B", "AB"]
+        self.actions = ["combine", "give", "use", "none"]
+
+
     @final
     def is_alive(self):
         """Check if agent is still alive (HP > 0)."""
         return self.hp > 0
+
+    @final
+    def execute_receive(self):
+        """Execute receiving items based on decision."""
+        for item, giver in self.incoming:
+            decision = self.decide_receive(item, giver)
+            if decision == "accept":
+                self.items.append(item)
+                print(f"{self.name} accepted {item} from {giver.name}")
+            else:
+                print(f"{self.name} rejected {item} from {giver.name}")
+        self.incoming = []
 
     @final
     def execute_speech(self, target, speech):
@@ -54,24 +71,16 @@ class Agent:
             print(f"{self.name} did nothing")
 
     # --- Decision methods (CAN override) ---
-    def decide_receive(self):
+    def decide_receive(self, item, giver):
         """Decide whether to accept incoming items."""
-        for item, giver in self.incoming:
-            if random.choice([True, False]):
-                self.items.append(item)
-                print(f"{self.name} accepted {item} from {giver.name}")
-            else:
-                print(f"{self.name} rejected {item} from {giver.name}")
-        self.incoming = []
+        return random.choice(self.choices)
 
     def decide_speech(self, others):
         """Decide what to say and to whom."""
-        speeches = ["", "A", "B", "AB"]
-        speech = random.choice(speeches)
+        speech = random.choice(self.speeches)
         target = random.choice(others) if speech and others else None
         return target, speech
 
     def decide_action(self, others):
         """Decide which action to take."""
-        actions = ["combine", "give", "use", "none"]
-        return random.choice(actions)
+        return random.choice(self.actions)
