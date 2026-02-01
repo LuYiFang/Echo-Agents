@@ -9,7 +9,7 @@ class Agent:
         self.name = name
         self.base_item = Item(base_item_name)  # base item (infinite)
         self.items = []  # external items
-        self.hp = 10
+        self.hp = 500
         self.incoming = []
 
         self.choices = ["accept", "reject"]
