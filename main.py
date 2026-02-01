@@ -1,12 +1,11 @@
-from Agent.CustomAgents.NNAgent import NNAgent
-from Agent.CustomAgents.QLearningAgent import QLearningAgent
-from Agent.CustomAgents.RandomAgent import RandomAgent
+from Agent.CustomAgents.NNAgent import (AggressiveNNAgent,
+                                        GenerousNNAgent, ConservativeNNAgent)
 from Game import Game
 
 agents = [
-    RandomAgent("Random", "X"),
-    QLearningAgent("RL", "Y"),
-    NNAgent("NN", "Z")
+    AggressiveNNAgent("Aggressive", "X"),
+    GenerousNNAgent("Generous", "Y"),
+    ConservativeNNAgent("Conservative", "Z")
 ]
 
 game = Game(agents)

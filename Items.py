@@ -9,9 +9,18 @@ class Item:
 
     def use(self):
         effects = {
+            "X": -1,
+            "XX": -2,
+            "Y": -1,
+            "YY": -2,
+            "Z": -1,
+            "ZZ": -2,
+
             "XY": +2,
-            "YZ": -2,
-            "XZ": 0
+            "XZ": +1,
+            "YZ": +1,
+
+            "XYZ": +3,
         }
         return effects.get(self.name, 0)
 

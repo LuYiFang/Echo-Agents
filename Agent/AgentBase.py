@@ -1,6 +1,6 @@
+from collections import deque
 import random
 from typing import final
-
 from Items import Item
 
 
@@ -11,11 +11,11 @@ class Agent:
         self.items = []  # external items
         self.hp = 500
         self.incoming = []
+        self.heard_log = deque(maxlen=5)  # last 5 messages (speaker, speech)
 
         self.choices = ["accept", "reject"]
         self.speeches = ["", "A", "B", "AB"]
         self.actions = ["combine", "give", "use", "none"]
-
 
     @final
     def is_alive(self):
@@ -38,13 +38,13 @@ class Agent:
     def execute_speech(self, target, speech):
         """Execute speech action."""
         if target and speech:
+            target.heard_log.append((self.name, speech))
             print(f"{self.name} said '{speech}' to {target.name}")
         else:
             print(f"{self.name} said nothing")
 
     @final
     def execute_action(self, action, others):
-        """Execute action (combine/give/use/none)."""
         if action == "combine" and self.items:
             item1 = self.base_item
             item2 = self.items.pop()
@@ -57,7 +57,7 @@ class Agent:
             if self.items and random.choice([True, False]):
                 item = self.items.pop()
             else:
-                item = Item(self.base_item.name)  # copy base item
+                item = Item(self.base_item.name)
             target.incoming.append((item, self))
             print(f"{self.name} tried to give {item} to {target.name}")
 
@@ -73,6 +73,11 @@ class Agent:
     # --- Decision methods (CAN override) ---
     def decide_receive(self, item, giver):
         """Decide whether to accept incoming items."""
+        for speaker, speech in self.heard_log:
+            if speech == "A" and speaker == "QAgent":
+                return "accept"
+            elif speech == "B" and speaker == "RandomAgent":
+                return "reject"
         return random.choice(self.choices)
 
     def decide_speech(self, others):
