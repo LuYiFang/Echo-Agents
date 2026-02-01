@@ -1,11 +1,11 @@
 from Agent.CustomAgents.NNAgent import NNAgent
-from Agent.CustomAgents.RLAgent import RLAgent
+from Agent.CustomAgents.QLearningAgent import QLearningAgent
 from Agent.CustomAgents.RandomAgent import RandomAgent
 from Game import Game
 
 agents = [
     RandomAgent("Random", "X"),
-    RLAgent("RL", "Y"),
+    QLearningAgent("RL", "Y"),
     NNAgent("NN", "Z")
 ]
 

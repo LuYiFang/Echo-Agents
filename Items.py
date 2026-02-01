@@ -1,9 +1,10 @@
 class Item:
     def __init__(self, name):
-        self.name = name
+        self.name = "".join(sorted(set(name)))
 
     def combine(self, other):
-        new_name = self.name + other.name
+        combined_letters = set(self.name) | set(other.name)
+        new_name = "".join(sorted(combined_letters))
         return Item(new_name)
 
     def use(self):

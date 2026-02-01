@@ -23,35 +23,43 @@ class NNAgent(Agent):
     def __init__(self, name, base_item_name):
         super().__init__(name, base_item_name)
 
-        # 三個獨立的 policy network
-        self.model_receive = PolicyNN(input_dim=3, output_dim=len(
-            self.choices))  # accept/reject
-        self.model_speech = PolicyNN(input_dim=3, output_dim=len(
-            self.speeches))  # "", A, B, AB
-        self.model_action = PolicyNN(input_dim=3, output_dim=len(
-            self.actions))  # combine, give, use, none
+        self.model_receive = PolicyNN(3, len(self.choices))
+        self.model_speech  = PolicyNN(3, len(self.speeches))
+        self.model_action  = PolicyNN(3, len(self.actions))
+
+        self.optimizer = torch.optim.Adam(
+            list(self.model_receive.parameters()) +
+            list(self.model_speech.parameters()) +
+            list(self.model_action.parameters()), lr=0.01
+        )
 
     def get_state(self):
-        # 狀態向量：HP, inventory 數量, incoming 數量
-        return torch.tensor([self.hp, len(self.items), len(self.incoming)],
-                            dtype=torch.float32)
+        return torch.tensor([self.hp, len(self.items), len(self.incoming)], dtype=torch.float32)
+
+    def _choose_and_learn(self, model, choices, reward=0):
+        state = self.get_state()
+        probs = model(state)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+
+        loss = -log_prob * reward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return choices[action.item()]
 
     def decide_receive(self, item, giver):
-        state = self.get_state()
-        probs = self.model_receive(state)
-        idx = torch.multinomial(probs, 1).item()
-        return self.choices[idx]
+        reward = 1 if self.is_alive() else -10
+        return self._choose_and_learn(self.model_receive, self.choices, reward)
 
     def decide_speech(self, others):
-        state = self.get_state()
-        probs = self.model_speech(state)
-        idx = torch.multinomial(probs, 1).item()
-        speech = self.speeches[idx]
+        reward = 1 if self.is_alive() else -10
+        speech = self._choose_and_learn(self.model_speech, self.speeches, reward)
         target = random.choice(others) if speech and others else None
         return target, speech
 
     def decide_action(self, others):
-        state = self.get_state()
-        probs = self.model_action(state)
-        idx = torch.multinomial(probs, 1).item()
-        return self.actions[idx]
+        reward = 1 if self.is_alive() else -10
+        return self._choose_and_learn(self.model_action, self.actions, reward)
