@@ -45,6 +45,9 @@ class NNBaseAgent(Agent):
         state = self.get_state()
         probs = model(state)
 
+        # clone before bias to avoid in-place modification issues
+        probs = probs.clone()
+
         # apply personality bias
         probs = self._apply_personality_bias(choices, probs)
 
@@ -81,35 +84,42 @@ class NNBaseAgent(Agent):
 class AggressiveNNAgent(NNBaseAgent):
     def _apply_personality_bias(self, choices, probs):
         if choices == self.choices:  # accept/reject
-            probs[1] += 0.2  # more reject
+            probs = probs.clone()
+            probs[1] = probs[1] + 0.2  # more reject
         elif choices == self.actions:
+            probs = probs.clone()
             for i, act in enumerate(choices):
                 if act in ["use", "combine"]:
-                    probs[i] += 0.2
+                    probs[i] = probs[i] + 0.2
         return probs
 
 
 class GenerousNNAgent(NNBaseAgent):
     def _apply_personality_bias(self, choices, probs):
         if choices == self.choices:
-            probs[0] += 0.2  # more accept
+            probs = probs.clone()
+            probs[0] = probs[0] + 0.2  # more accept
         elif choices == self.actions:
+            probs = probs.clone()
             for i, act in enumerate(choices):
                 if act == "give":
-                    probs[i] += 0.2
+                    probs[i] = probs[i] + 0.2
         elif choices == self.speeches:
+            probs = probs.clone()
             for i, sp in enumerate(choices):
                 if sp != "":
-                    probs[i] += 0.1
+                    probs[i] = probs[i] + 0.1
         return probs
 
 
 class ConservativeNNAgent(NNBaseAgent):
     def _apply_personality_bias(self, choices, probs):
         if choices == self.choices:
-            probs[0] += 0.1  # slight accept
+            probs = probs.clone()
+            probs[0] = probs[0] + 0.1  # slight accept
         elif choices == self.actions:
+            probs = probs.clone()
             for i, act in enumerate(choices):
                 if act == "none":
-                    probs[i] += 0.3
+                    probs[i] = probs[i] + 0.3
         return probs
