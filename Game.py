@@ -49,3 +49,9 @@ class Game:
             print(f"\nWinner: {alive_agents[0].name}")
         else:
             print("\nAll agents are dead. No winner.")
+
+        print("\n===== Summary of Agents =====")
+        for agent in self.agents:
+            print(f"\n{agent.name} history:")
+            for round_num, kind, detail in agent.history:
+                print(f"  Round {round_num}: {kind} → {detail}")

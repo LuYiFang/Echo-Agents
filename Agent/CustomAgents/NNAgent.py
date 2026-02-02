@@ -20,7 +20,7 @@ class PolicyNN(nn.Module):
 
 
 class NNBaseAgent(Agent):
-    def __init__(self, name, base_item_name):
+    def __init__(self, name, base_item_name, epsilon=0.1):
         super().__init__(name, base_item_name)
 
         self.model_receive = PolicyNN(3, len(self.choices))
@@ -33,37 +33,34 @@ class NNBaseAgent(Agent):
             list(self.model_action.parameters()), lr=0.01
         )
 
+        # exploration rate (epsilon)
+        self.epsilon = epsilon
+
     def get_state(self):
         return torch.tensor([self.hp, len(self.items), len(self.incoming)],
                             dtype=torch.float32)
 
-    def _apply_personality_bias(self, choices, probs):
-        # Default: no bias
-        return probs
-
     def _choose_and_learn(self, model, choices, reward=0):
         state = self.get_state()
-        probs = model(state)
-
-        # clone before bias to avoid in-place modification issues
-        probs = probs.clone()
-
-        # apply personality bias
-        probs = self._apply_personality_bias(choices, probs)
-
-        # normalize after bias
+        probs = model(state).clone()
         probs = probs / probs.sum()
 
-        dist = torch.distributions.Categorical(probs)
-        action = dist.sample()
-        log_prob = dist.log_prob(action)
+        # epsilon-greedy: personality decides exploration rate
+        if random.random() < self.epsilon:
+            action = random.choice(range(len(choices)))  # exploration
+        else:
+            dist = torch.distributions.Categorical(probs)
+            action = dist.sample().item()
 
+        # learning step
+        dist = torch.distributions.Categorical(probs)
+        log_prob = dist.log_prob(torch.tensor(action))
         loss = -log_prob * reward
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-        return choices[action.item()]
+        return choices[action]
 
     def decide_receive(self, item, giver):
         reward = 1 if self.is_alive() else -10
@@ -71,8 +68,7 @@ class NNBaseAgent(Agent):
 
     def decide_speech(self, others):
         reward = 1 if self.is_alive() else -10
-        speech = self._choose_and_learn(self.model_speech, self.speeches,
-                                        reward)
+        speech = self._choose_and_learn(self.model_speech, self.speeches, reward)
         target = random.choice(others) if speech and others else None
         return target, speech
 
@@ -81,45 +77,25 @@ class NNBaseAgent(Agent):
         return self._choose_and_learn(self.model_action, self.actions, reward)
 
 
+# -----------------------------
+# Aggressive personality (high exploration)
+# -----------------------------
 class AggressiveNNAgent(NNBaseAgent):
-    def _apply_personality_bias(self, choices, probs):
-        if choices == self.choices:  # accept/reject
-            probs = probs.clone()
-            probs[1] = probs[1] + 0.2  # more reject
-        elif choices == self.actions:
-            probs = probs.clone()
-            for i, act in enumerate(choices):
-                if act in ["use", "combine"]:
-                    probs[i] = probs[i] + 0.2
-        return probs
+    def __init__(self, name, base_item_name):
+        super().__init__(name, base_item_name, epsilon=0.3)  # high exploration
 
 
+# -----------------------------
+# Generous personality (moderate exploration, cooperative bias)
+# -----------------------------
 class GenerousNNAgent(NNBaseAgent):
-    def _apply_personality_bias(self, choices, probs):
-        if choices == self.choices:
-            probs = probs.clone()
-            probs[0] = probs[0] + 0.2  # more accept
-        elif choices == self.actions:
-            probs = probs.clone()
-            for i, act in enumerate(choices):
-                if act == "give":
-                    probs[i] = probs[i] + 0.2
-        elif choices == self.speeches:
-            probs = probs.clone()
-            for i, sp in enumerate(choices):
-                if sp != "":
-                    probs[i] = probs[i] + 0.1
-        return probs
+    def __init__(self, name, base_item_name):
+        super().__init__(name, base_item_name, epsilon=0.15)  # moderate exploration
 
 
+# -----------------------------
+# Conservative personality (low exploration)
+# -----------------------------
 class ConservativeNNAgent(NNBaseAgent):
-    def _apply_personality_bias(self, choices, probs):
-        if choices == self.choices:
-            probs = probs.clone()
-            probs[0] = probs[0] + 0.1  # slight accept
-        elif choices == self.actions:
-            probs = probs.clone()
-            for i, act in enumerate(choices):
-                if act == "none":
-                    probs[i] = probs[i] + 0.3
-        return probs
+    def __init__(self, name, base_item_name):
+        super().__init__(name, base_item_name, epsilon=0.05)  # low exploration
