@@ -23,9 +23,9 @@ class NNBaseAgent(Agent):
     def __init__(self, name, base_item_name, epsilon=0.1):
         super().__init__(name, base_item_name)
 
-        self.model_receive = PolicyNN(3, len(self.choices))
-        self.model_speech = PolicyNN(3, len(self.speeches))
-        self.model_action = PolicyNN(3, len(self.actions))
+        self.model_receive = PolicyNN(5, len(self.choices))
+        self.model_speech = PolicyNN(5, len(self.speeches))
+        self.model_action = PolicyNN(5, len(self.actions))
 
         self.optimizer = torch.optim.Adam(
             list(self.model_receive.parameters()) +
@@ -37,8 +37,18 @@ class NNBaseAgent(Agent):
         self.epsilon = epsilon
 
     def get_state(self):
-        return torch.tensor([self.hp, len(self.items), len(self.incoming)],
-                            dtype=torch.float32)
+        base = [self.hp, len(self.items), len(self.incoming)]
+
+        if self.heard_log:
+            speaker, speech = self.heard_log[-1]
+            # encode speech
+            a_count = speech.count("A")
+            b_count = speech.count("B")
+            speech_vec = [a_count, b_count]
+        else:
+            speech_vec = [0, 0]
+
+        return torch.tensor(base + speech_vec, dtype=torch.float32)
 
     def _choose_and_learn(self, model, choices, reward=0):
         state = self.get_state()
