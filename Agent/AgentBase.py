@@ -1,3 +1,4 @@
+import itertools
 from collections import deque
 import random
 from typing import final
@@ -5,17 +6,23 @@ from Items import Item
 
 
 class Agent:
-    def __init__(self, name, base_item_name):
+    def __init__(self, name, base_item_name, max_speech_len=3):
         self.name = name
         self.base_item = Item(base_item_name)  # base item (infinite)
         self.items = []  # external items
         self.hp = 500
         self.incoming = []
         self.heard_log = deque(maxlen=5)  # last 5 messages (speaker, speech)
-        self.history = []
+        self.logger = None
 
         self.choices = ["accept", "reject"]
-        self.speeches = ["", "A", "B", "AB"]
+        vocab = ["A", "B"]
+        speeches = [""]
+        for l in range(1, max_speech_len + 1):
+            for combo in itertools.product(vocab, repeat=l):
+                speeches.append("".join(combo))
+        self.speeches = speeches
+
         self.actions = ["combine", "give", "use", "none"]
 
     @final
@@ -30,21 +37,18 @@ class Agent:
             decision = self.decide_receive(item, giver)
             if decision == "accept":
                 self.items.append(item)
-                print(f"{self.name} accepted {item} from {giver.name}")
+                self.logger.log(f"{self.name} accepted {item} from {giver.name}")
             else:
-                print(f"{self.name} rejected {item} from {giver.name}")
+                self.logger.log(f"{self.name} rejected {item} from {giver.name}")
         self.incoming = []
 
     @final
     def execute_speech(self, target, speech, round_num=None):
         if target and speech:
             target.heard_log.append((self.name, speech))
-            print(f"{self.name} said '{speech}' to {target.name}")
-            self.history.append(
-                (round_num, "speech", f"to {target.name}: {speech}"))
+            self.logger.log(f"{self.name} said '{speech}' to {target.name}")
         else:
-            print(f"{self.name} said nothing")
-            self.history.append((round_num, "speech", "nothing"))
+            self.logger.log(f"{self.name} said nothing")
 
     @final
     def execute_action(self, action, others, round_num=None):
@@ -53,9 +57,7 @@ class Agent:
             item2 = self.items.pop()
             new_item = item1.combine(item2)
             self.items.append(new_item)
-            print(f"{self.name} combined {item1}+{item2} → created {new_item}")
-            self.history.append(
-                (round_num, "action", f"combine {item1}+{item2}"))
+            self.logger.log(f"{self.name} combined {item1}+{item2} → created {new_item}")
 
         elif action == "give" and (self.items or self.base_item) and others:
             target = random.choice(others)
@@ -64,21 +66,16 @@ class Agent:
             else:
                 item = Item(self.base_item.name)
             target.incoming.append((item, self))
-            print(f"{self.name} tried to give {item} to {target.name}")
-            self.history.append(
-                (round_num, "action", f"give {item} to {target.name}"))
+            self.logger.log(f"{self.name} tried to give {item} to {target.name}")
 
         elif action == "use" and self.items:
             item = self.items.pop()
             effect = item.use()
             self.hp += effect
-            print(f"{self.name} used {item} → HP {effect:+}")
-            self.history.append(
-                (round_num, "action", f"use {item}, HP {effect:+}"))
+            self.logger.log(f"{self.name} used {item} → HP {effect:+}")
 
         else:
-            print(f"{self.name} did nothing")
-            self.history.append((round_num, "action", "none"))
+            self.logger.log(f"{self.name} did nothing")
 
     # --- Decision methods (CAN override) ---
     def decide_receive(self, item, giver):

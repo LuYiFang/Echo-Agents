@@ -1,7 +1,14 @@
+from Logger import Logger
+
+
 class Game:
     def __init__(self, agents):
         self.agents = agents
         self.round_num = 1
+        self.logger = Logger()
+
+        for agent in self.agents:
+            agent.logger = self.logger
 
     def play_round(self):
         print(f"\n========== Round {self.round_num} ==========")
@@ -50,8 +57,7 @@ class Game:
         else:
             print("\nAll agents are dead. No winner.")
 
-        print("\n===== Summary of Agents =====")
-        for agent in self.agents:
-            print(f"\n{agent.name} history:")
-            for round_num, kind, detail in agent.history:
-                print(f"  Round {round_num}: {kind} → {detail}")
+        with open("game_log.txt", "w", encoding="utf-8") as f:
+            for line in self.log:
+                f.write(line + "\n")
+
