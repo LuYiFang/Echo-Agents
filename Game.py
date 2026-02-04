@@ -11,40 +11,40 @@ class Game:
             agent.logger = self.logger
 
     def play_round(self):
-        print(f"\n========== Round {self.round_num} ==========")
+        self.logger.log(f"\n========== Round {self.round_num} ==========")
 
-        print("\n[Receiving Phase]")
+        self.logger.log("\n[Receiving Phase]")
         for agent in self.agents:
             if agent.is_alive():
                 agent.execute_receive()
 
-        print("\n[Action Phase]")
+        self.logger.log("\n[Action Phase]")
         for agent in self.agents:
             if agent.is_alive():
                 agent.hp -= 1
                 if not agent.is_alive():
-                    print(f"\n--- {agent.name}'s Turn ---")
-                    print(f"{agent.name} has been eliminated (HP=0)")
+                    self.logger.log(f"\n--- {agent.name}'s Turn ---")
+                    self.logger.log(f"{agent.name} has been eliminated (HP=0)")
                     continue
 
                 others = [a for a in self.agents if a != agent and a.is_alive()]
 
-                print(f"\n--- {agent.name}'s Turn ---")
+                self.logger.log(f"\n--- {agent.name}'s Turn ---")
                 target, speech = agent.decide_speech(others)
                 agent.execute_speech(target, speech)
 
                 action = agent.decide_action(others)
                 agent.execute_action(action, others)
 
-        print("\n[End of Round Status]")
+        self.logger.log("\n[End of Round Status]")
         for agent in self.agents:
             items_str = ", ".join([str(agent.base_item)] + [str(i) for i in agent.items]) if agent.items or agent.base_item else "None"
             status = f"{agent.name:<8} | HP: {agent.hp:<3} | Items: {items_str}"
             if not agent.is_alive():
                 status += "  (Dead)"
-            print(status)
+            self.logger.log(status)
 
-        print("======================================")
+        self.logger.log("======================================")
         self.round_num += 1
 
     def run(self):
@@ -53,11 +53,10 @@ class Game:
 
         alive_agents = [a for a in self.agents if a.is_alive()]
         if alive_agents:
-            print(f"\nWinner: {alive_agents[0].name}")
+            self.logger.log(f"\nWinner: {alive_agents[0].name}")
         else:
-            print("\nAll agents are dead. No winner.")
+            self.logger.log("\nAll agents are dead. No winner.")
 
-        with open("game_log.txt", "w", encoding="utf-8") as f:
-            for line in self.log:
-                f.write(line + "\n")
+        self.logger.save("game_log.txt")
+
 
