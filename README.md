@@ -9,7 +9,7 @@ Each agent shares the same set of possible actions, but their **decision-making 
 
 1. **Initial Setup**
    - Each agent starts with:
-     - HP = 10
+     - HP = 500
      - One infinite base item (cannot be consumed, can be copied to others)
      - An empty inventory for external items
 
@@ -47,3 +47,12 @@ Run the game:
 
 ```bash
 python main.py
+```
+
+## Custom Agents
+
+You can create custom agents by inheriting from the `Agent` class and implementing three main decision-making methods:
+
+- `decide_receive(self, item, giver)` ➜ Decide whether to accept an item
+- `decide_speech(self, others)` ➜ Decide what to say and to whom
+- `decide_action(self, others)` ➜ Decide what action to perform

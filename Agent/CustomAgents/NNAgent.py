@@ -12,10 +12,9 @@ class SpeechEncoder(nn.Module):
         self.rnn = nn.GRU(embed_dim, hidden_dim, batch_first=True)
 
     def forward(self, seq_idx):
-        # seq_idx: tensor of shape (1, seq_len)
         emb = self.embedding(seq_idx)
         _, h = self.rnn(emb)
-        return h.squeeze(0)  # (hidden_dim,)
+        return h.squeeze(0).squeeze(0)  # (hidden_dim,)
 
 
 class PolicyNN(nn.Module):
@@ -37,8 +36,7 @@ class NNBaseAgent(Agent):
         super().__init__(name, base_item_name)
 
         self.speech_encoder = SpeechEncoder()
-
-        state_dim = 3 + 32
+        state_dim = 3 + 32  # hp, items, incoming + speech embedding
 
         self.model_receive = PolicyNN(state_dim, len(self.choices))
         self.model_speech = PolicyNN(state_dim, len(self.speeches))
@@ -51,29 +49,24 @@ class NNBaseAgent(Agent):
             list(self.speech_encoder.parameters()), lr=0.01
         )
 
-        # exploration rate (epsilon)
         self.epsilon = epsilon
 
     def encode_speech(self, speech: str):
-        # 把 speech 轉成 index 序列: ""=0, A=1, B=2
         mapping = {"": 0, "A": 1, "B": 2}
         seq_idx = [mapping[ch] for ch in speech if ch in mapping]
         if not seq_idx:
             seq_idx = [0]
-        seq_tensor = torch.tensor(seq_idx, dtype=torch.long).unsqueeze(
-            0)  # (1, seq_len)
-        return self.speech_encoder(seq_tensor)  # (hidden_dim,)
+        seq_tensor = torch.tensor(seq_idx, dtype=torch.long).unsqueeze(0)
+        return self.speech_encoder(seq_tensor)
 
     def get_state(self):
         base = torch.tensor([self.hp, len(self.items), len(self.incoming)],
                             dtype=torch.float32)
-
         if self.heard_log:
             _, speech = self.heard_log[-1]
-            speech_vec = self.encode_speech(speech)
+            speech_vec = self.encode_speech(speech).view(-1)
         else:
             speech_vec = torch.zeros(32)
-
         return torch.cat([base, speech_vec], dim=0)
 
     def _choose_and_learn(self, model, choices, reward=0):
@@ -96,21 +89,94 @@ class NNBaseAgent(Agent):
 
         return choices[action]
 
+    # --- Decision methods with HP-based reward ---
     def decide_receive(self, item, giver):
-        reward = 1 if self.is_alive() else -10
-        return self._choose_and_learn(self.model_receive, self.choices, reward)
+        prev_hp = self.hp
+
+        # 選擇動作
+        state = self.get_state()
+        probs = self.model_receive(state).clone()
+        probs = probs / probs.sum()
+
+        if random.random() < self.epsilon:
+            action_idx = random.choice(range(len(self.choices)))
+        else:
+            dist = torch.distributions.Categorical(probs)
+            action_idx = dist.sample().item()
+
+        choice = self.choices[action_idx]
+
+        # 執行後 HP 可能變化（例如接受物品之後）
+        reward = self.hp - prev_hp
+
+        # 更新模型
+        dist = torch.distributions.Categorical(probs)
+        log_prob = dist.log_prob(torch.tensor(action_idx))
+        loss = -log_prob * reward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return choice
 
     def decide_speech(self, others):
-        reward = 1 if self.is_alive() else -10
-        speech = self._choose_and_learn(self.model_speech, self.speeches,
-                                        reward)
+        prev_hp = self.hp
+
+        # 選擇動作
+        state = self.get_state()
+        probs = self.model_speech(state).clone()
+        probs = probs / probs.sum()
+
+        if random.random() < self.epsilon:
+            action_idx = random.choice(range(len(self.speeches)))
+        else:
+            dist = torch.distributions.Categorical(probs)
+            action_idx = dist.sample().item()
+
+        speech = self.speeches[action_idx]
         target = random.choice(others) if speech and others else None
+
+        # reward = HP 變化量
+        reward = self.hp - prev_hp
+
+        # 更新模型
+        dist = torch.distributions.Categorical(probs)
+        log_prob = dist.log_prob(torch.tensor(action_idx))
+        loss = -log_prob * reward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
         return target, speech
 
     def decide_action(self, others):
-        reward = 1 if self.is_alive() else -10
-        return self._choose_and_learn(self.model_action, self.actions, reward)
+        prev_hp = self.hp
 
+        # 選擇動作
+        state = self.get_state()
+        probs = self.model_action(state).clone()
+        probs = probs / probs.sum()
+
+        if random.random() < self.epsilon:
+            action_idx = random.choice(range(len(self.actions)))
+        else:
+            dist = torch.distributions.Categorical(probs)
+            action_idx = dist.sample().item()
+
+        action = self.actions[action_idx]
+
+        # reward = HP 變化量
+        reward = self.hp - prev_hp
+
+        # 更新模型
+        dist = torch.distributions.Categorical(probs)
+        log_prob = dist.log_prob(torch.tensor(action_idx))
+        loss = -log_prob * reward
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return action
 
 # -----------------------------
 # Aggressive personality (high exploration)
