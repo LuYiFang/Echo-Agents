@@ -5,6 +5,19 @@ import torch.nn as nn
 from Agent.AgentBase import Agent
 
 
+class SpeechEncoder(nn.Module):
+    def __init__(self, vocab_size=3, embed_dim=16, hidden_dim=32):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)  # vocab: "", A, B
+        self.rnn = nn.GRU(embed_dim, hidden_dim, batch_first=True)
+
+    def forward(self, seq_idx):
+        # seq_idx: tensor of shape (1, seq_len)
+        emb = self.embedding(seq_idx)
+        _, h = self.rnn(emb)
+        return h.squeeze(0)  # (hidden_dim,)
+
+
 class PolicyNN(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
@@ -23,46 +36,57 @@ class NNBaseAgent(Agent):
     def __init__(self, name, base_item_name, epsilon=0.1):
         super().__init__(name, base_item_name)
 
-        self.model_receive = PolicyNN(5, len(self.choices))
-        self.model_speech = PolicyNN(5, len(self.speeches))
-        self.model_action = PolicyNN(5, len(self.actions))
+        self.speech_encoder = SpeechEncoder()
+
+        state_dim = 3 + 32
+
+        self.model_receive = PolicyNN(state_dim, len(self.choices))
+        self.model_speech = PolicyNN(state_dim, len(self.speeches))
+        self.model_action = PolicyNN(state_dim, len(self.actions))
 
         self.optimizer = torch.optim.Adam(
             list(self.model_receive.parameters()) +
             list(self.model_speech.parameters()) +
-            list(self.model_action.parameters()), lr=0.01
+            list(self.model_action.parameters()) +
+            list(self.speech_encoder.parameters()), lr=0.01
         )
 
         # exploration rate (epsilon)
         self.epsilon = epsilon
 
+    def encode_speech(self, speech: str):
+        # 把 speech 轉成 index 序列: ""=0, A=1, B=2
+        mapping = {"": 0, "A": 1, "B": 2}
+        seq_idx = [mapping[ch] for ch in speech if ch in mapping]
+        if not seq_idx:
+            seq_idx = [0]
+        seq_tensor = torch.tensor(seq_idx, dtype=torch.long).unsqueeze(
+            0)  # (1, seq_len)
+        return self.speech_encoder(seq_tensor)  # (hidden_dim,)
+
     def get_state(self):
-        base = [self.hp, len(self.items), len(self.incoming)]
+        base = torch.tensor([self.hp, len(self.items), len(self.incoming)],
+                            dtype=torch.float32)
 
         if self.heard_log:
-            speaker, speech = self.heard_log[-1]
-            # encode speech
-            a_count = speech.count("A")
-            b_count = speech.count("B")
-            speech_vec = [a_count, b_count]
+            _, speech = self.heard_log[-1]
+            speech_vec = self.encode_speech(speech)
         else:
-            speech_vec = [0, 0]
+            speech_vec = torch.zeros(32)
 
-        return torch.tensor(base + speech_vec, dtype=torch.float32)
+        return torch.cat([base, speech_vec], dim=0)
 
     def _choose_and_learn(self, model, choices, reward=0):
         state = self.get_state()
         probs = model(state).clone()
         probs = probs / probs.sum()
 
-        # epsilon-greedy: personality decides exploration rate
         if random.random() < self.epsilon:
-            action = random.choice(range(len(choices)))  # exploration
+            action = random.choice(range(len(choices)))
         else:
             dist = torch.distributions.Categorical(probs)
             action = dist.sample().item()
 
-        # learning step
         dist = torch.distributions.Categorical(probs)
         log_prob = dist.log_prob(torch.tensor(action))
         loss = -log_prob * reward
@@ -78,7 +102,8 @@ class NNBaseAgent(Agent):
 
     def decide_speech(self, others):
         reward = 1 if self.is_alive() else -10
-        speech = self._choose_and_learn(self.model_speech, self.speeches, reward)
+        speech = self._choose_and_learn(self.model_speech, self.speeches,
+                                        reward)
         target = random.choice(others) if speech and others else None
         return target, speech
 
@@ -100,7 +125,8 @@ class AggressiveNNAgent(NNBaseAgent):
 # -----------------------------
 class GenerousNNAgent(NNBaseAgent):
     def __init__(self, name, base_item_name):
-        super().__init__(name, base_item_name, epsilon=0.15)  # moderate exploration
+        super().__init__(name, base_item_name,
+                         epsilon=0.15)  # moderate exploration
 
 
 # -----------------------------
